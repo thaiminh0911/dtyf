@@ -32,10 +32,6 @@ dont_touch_your_face
 ├── package-lock.json
 ├── node_modules
 ├── public
-│   ├── assets
-        ├── img
-            └── mindmap.png
-        └── sound.mp3
 │   ├── favicon.ico
 │   ├── index.html
 |   ├── logo192.png
@@ -43,6 +39,10 @@ dont_touch_your_face
 |   ├── manifest.json
 │   └── robots.txt
 └── src
+    ├── assets
+        ├── img
+            └── mindmap.png
+        └── sound.mp3
     ├── App.css
     ├── App.js
     ├── App.test.js
