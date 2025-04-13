@@ -7,11 +7,7 @@ This project is made by Nguyen Thai Minh
 
 ## How to use?
 
-<<<<<<< HEAD
-You can use this React application directly by [clicking here](https://dtyf.netlify.app)
-=======
 You can use this React application directly by [dtyf.languagedevstudy.com](https://dtyf.languagedevstudy.com/) or [dtyf.netlify.app](https://dtyf.netlify.app/)
->>>>>>> b7a1102aad6fb1de601de5223611d7e01d68a737
 
 Or, if you want to edit this project, then you can do the following:
 
